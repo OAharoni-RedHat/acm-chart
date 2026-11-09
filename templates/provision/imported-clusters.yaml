@@ -1,0 +1,74 @@
+{{- range .Values.acm.importedClusters }}
+{{- include "acm.imported.validateEntry" . }}
+{{- $secretName := .secretName }}
+{{- $clusterGroup := .clusterGroup }}
+{{- $clusterName := include "acm.imported.clusterName" $secretName }}
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $clusterName }}
+---
+apiVersion: cluster.open-cluster-management.io/v1
+kind: ManagedCluster
+metadata:
+  name: {{ $clusterName }}
+  labels:
+    # Only manage clusterGroup here. ACM controllers overwrite cloud/vendor and
+    # add discovery/addon labels after import, which would otherwise leave Argo OutOfSync.
+    clusterGroup: {{ $clusterGroup }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true,RespectIgnoreDifferences=true
+spec:
+  hubAcceptsClient: true
+  leaseDurationSeconds: 60
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: {{ $clusterName }}-auto-import
+  namespace: {{ $clusterName }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  data:
+  - secretKey: kubeconfig
+    remoteRef:
+      key: secret/data/hub/{{ $secretName }}
+      property: kubeconfig
+  refreshInterval: 1h0m0s
+  secretStoreRef:
+    name: {{ $.Values.secretStore.name }}
+    kind: {{ $.Values.secretStore.kind }}
+  target:
+    name: auto-import-secret
+    creationPolicy: Owner
+    template:
+      type: Opaque
+      data:
+        autoImportRetry: "5"
+        kubeconfig: |-
+          {{ "{{ .kubeconfig | toString }}" }}
+---
+apiVersion: agent.open-cluster-management.io/v1
+kind: KlusterletAddonConfig
+metadata:
+  name: {{ $clusterName }}
+  namespace: {{ $clusterName }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  clusterName: {{ $clusterName }}
+  clusterNamespace: {{ $clusterName }}
+  clusterLabels:
+    cloud: auto-detect
+    vendor: auto-detect
+  applicationManager:
+    enabled: true
+  policyController:
+    enabled: true
+  searchCollector:
+    enabled: true
+  certPolicyController:
+    enabled: true
+{{- end }}

@@ -470,3 +470,28 @@ sso:
 tls:
   ca: {}
 {{- end }}
+
+{{/*
+Derive ManagedCluster name from a values-secret name by stripping _cluster_kubeconfig.
+Fails if the secret name does not end with that suffix.
+*/}}
+{{- define "acm.imported.clusterName" -}}
+{{- $secretName := . -}}
+{{- $suffix := "_cluster_kubeconfig" -}}
+{{- if not (hasSuffix $suffix $secretName) -}}
+{{- fail (printf "acm.importedClusters secretName %q must end with %q" $secretName $suffix) -}}
+{{- end -}}
+{{- trimSuffix $suffix $secretName -}}
+{{- end -}}
+
+{{/*
+Validate a single acm.importedClusters entry has secretName and clusterGroup.
+*/}}
+{{- define "acm.imported.validateEntry" -}}
+{{- if or (not .secretName) (eq .secretName "") -}}
+{{- fail "acm.importedClusters entry is missing required field secretName" -}}
+{{- end -}}
+{{- if or (not .clusterGroup) (eq .clusterGroup "") -}}
+{{- fail (printf "acm.importedClusters entry for secretName %q is missing required field clusterGroup" .secretName) -}}
+{{- end -}}
+{{- end -}}
