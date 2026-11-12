@@ -495,3 +495,76 @@ Validate a single acm.importedClusters entry has secretName and clusterGroup.
 {{- fail (printf "acm.importedClusters entry for secretName %q is missing required field clusterGroup" .secretName) -}}
 {{- end -}}
 {{- end -}}
+
+{{/*
+Render a ManagedCluster used by both clusterDeployments and importedClusters.
+
+Expected dict keys:
+  - name (required)
+  - labels (required map)
+  - syncOptions (optional; default includes SkipDryRunOnMissingResource + RespectIgnoreDifferences)
+  - leaseDurationSeconds (optional; default 60)
+*/}}
+{{- define "acm.managedCluster" -}}
+apiVersion: cluster.open-cluster-management.io/v1
+kind: ManagedCluster
+metadata:
+  name: {{ .name }}
+  labels:
+{{- range $k, $v := .labels }}
+    {{ $k }}: {{ $v }}
+{{- end }}
+  annotations:
+    argocd.argoproj.io/sync-options: {{ .syncOptions | default "SkipDryRunOnMissingResource=true,RespectIgnoreDifferences=true" }}
+spec:
+  hubAcceptsClient: true
+  leaseDurationSeconds: {{ .leaseDurationSeconds | default 60 }}
+{{- end -}}
+
+{{/*
+Build ManagedCluster labels for a managedClusterGroups entry used by clusterDeployments.
+Always sets clusterset to the group name. Uses acmlabels when present; otherwise
+sets clusterGroup to the group name.
+*/}}
+{{- define "acm.managedCluster.labels.fromGroup" -}}
+{{- $labels := dict "cluster.open-cluster-management.io/clusterset" .name -}}
+{{- if or (not .acmlabels) (eq (len .acmlabels) 0) -}}
+{{- $_ := set $labels "clusterGroup" .name -}}
+{{- else -}}
+{{- range .acmlabels -}}
+{{- $_ := set $labels .name .value -}}
+{{- end -}}
+{{- end -}}
+{{- mustToJson $labels -}}
+{{- end -}}
+
+{{/*
+Render a KlusterletAddonConfig with ACM console-like default addons enabled.
+Used by both clusterDeployments and importedClusters.
+
+Expected dict keys:
+  - name (required; used for metadata name/namespace and spec.clusterName/clusterNamespace)
+*/}}
+{{- define "acm.klusterletAddonConfig" -}}
+apiVersion: agent.open-cluster-management.io/v1
+kind: KlusterletAddonConfig
+metadata:
+  name: {{ .name }}
+  namespace: {{ .name }}
+  annotations:
+    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
+spec:
+  clusterName: {{ .name }}
+  clusterNamespace: {{ .name }}
+  clusterLabels:
+    cloud: auto-detect
+    vendor: auto-detect
+  applicationManager:
+    enabled: true
+  policyController:
+    enabled: true
+  searchCollector:
+    enabled: true
+  certPolicyController:
+    enabled: true
+{{- end -}}

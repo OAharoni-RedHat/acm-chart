@@ -9,19 +9,8 @@ kind: Namespace
 metadata:
   name: {{ $clusterName }}
 ---
-apiVersion: cluster.open-cluster-management.io/v1
-kind: ManagedCluster
-metadata:
-  name: {{ $clusterName }}
-  labels:
-    # Only manage clusterGroup here. ACM controllers overwrite cloud/vendor and
-    # add discovery/addon labels after import, which would otherwise leave Argo OutOfSync.
-    clusterGroup: {{ $clusterGroup }}
-  annotations:
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true,RespectIgnoreDifferences=true
-spec:
-  hubAcceptsClient: true
-  leaseDurationSeconds: 60
+{{/* Only manage clusterGroup here. ACM overwrites cloud/vendor and adds discovery/addon labels after import. */}}
+{{ include "acm.managedCluster" (dict "name" $clusterName "labels" (dict "clusterGroup" $clusterGroup)) }}
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -50,25 +39,5 @@ spec:
         kubeconfig: |-
           {{ "{{ .kubeconfig | toString }}" }}
 ---
-apiVersion: agent.open-cluster-management.io/v1
-kind: KlusterletAddonConfig
-metadata:
-  name: {{ $clusterName }}
-  namespace: {{ $clusterName }}
-  annotations:
-    argocd.argoproj.io/sync-options: SkipDryRunOnMissingResource=true
-spec:
-  clusterName: {{ $clusterName }}
-  clusterNamespace: {{ $clusterName }}
-  clusterLabels:
-    cloud: auto-detect
-    vendor: auto-detect
-  applicationManager:
-    enabled: true
-  policyController:
-    enabled: true
-  searchCollector:
-    enabled: true
-  certPolicyController:
-    enabled: true
+{{ include "acm.klusterletAddonConfig" (dict "name" $clusterName) }}
 {{- end }}

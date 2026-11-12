@@ -61,9 +61,14 @@ tests:
         equal:
           path: spec.leaseDurationSeconds
           value: 60
+      - documentIndex: 1
+        equal:
+          path: metadata.annotations["argocd.argoproj.io/sync-options"]
+          value: SkipDryRunOnMissingResource=true,RespectIgnoreDifferences=true
       - documentIndex: 2
         isKind:
           of: ExternalSecret
+
       - documentIndex: 2
         equal:
           path: metadata.name
